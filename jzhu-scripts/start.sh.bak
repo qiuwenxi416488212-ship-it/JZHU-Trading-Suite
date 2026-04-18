@@ -1,0 +1,59 @@
+#!/bin/bash
+# 一键启动所有服务
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+echo "=== 启动 jzhu-trading 所有服务 ==="
+
+# 1. 启动 TimescaleDB
+echo "[1/3] 启动 TimescaleDB..."
+if docker ps -a --format '{{.Names}}' | grep -q "^trading-timescaledb$"; then
+    if docker ps --format '{{.Names}}' | grep -q "^trading-timescaledb$"; then
+        echo "  TimescaleDB 已运行"
+    else
+        docker start trading-timescaledb
+        echo "  TimescaleDB 启动成功"
+    fi
+else
+    docker run -d \
+        --name trading-timescaledb \
+        -p 5432:5432 \
+        -e POSTGRES_DB=trading_platform \
+        -e POSTGRES_USER=trading \
+        -e POSTGRES_PASSWORD=trading123 \
+        -v trading-pgdata:/var/lib/postgresql/data \
+        timescale/timescaledb:latest-pg16
+    echo "  TimescaleDB 创建并启动成功"
+fi
+
+# 等待数据库就绪
+echo "  等待数据库就绪..."
+sleep 5
+
+# 2. 初始化数据库（如果尚未初始化）
+echo "[2/3] 初始化数据库..."
+if [ -f "$PROJECT_ROOT/db/init/01_init_kline.sql" ]; then
+    docker exec -i trading-timescaledb psql -U trading -d trading_platform < "$PROJECT_ROOT/db/init/01_init_kline.sql" 2>/dev/null || echo "  数据库已初始化或无需重复初始化"
+else
+    echo "  警告: 初始化脚本不存在"
+fi
+
+# 3. 启动所有Java服务
+echo "[3/3] 启动 Java 服务..."
+cd "$PROJECT_ROOT"
+
+# 使用后台进程启动各服务
+echo "  启动 market-data-service..."
+(cd market-data-service && mvn spring-boot:run -DskipTests > /dev/null 2>&1 &)
+echo "  market-data-service 异步启动中..."
+
+echo "  启动 web-service..."
+(cd web-service && mvn spring-boot:run -DskipTests > /dev/null 2>&1 &)
+echo "  web-service 异步启动中..."
+
+echo ""
+echo "=== 所有服务启动完成 ==="
+echo "请使用 'scripts/status.sh' 查看服务状态"

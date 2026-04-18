@@ -1,0 +1,29 @@
+#!/bin/bash
+# 一键关闭所有服务
+
+set -e
+
+echo "=== 关闭 jzhu-trading 所有服务 ==="
+
+# 1. 关闭 Java 服务 (通过端口或进程名)
+echo "[1/2] 关闭 Java 服务..."
+
+# 关闭 market-data-service (默认端口 8081)
+fuser -k 8081/tcp 2>/dev/null || true
+echo "  market-data-service 已关闭"
+
+# 关闭 web-service (默认端口 8080)
+fuser -k 8080/tcp 2>/dev/null || true
+echo "  web-service 已关闭"
+
+# 2. 关闭 TimescaleDB
+echo "[2/2] 关闭 TimescaleDB..."
+if docker ps --format '{{.Names}}' | grep -q "^trading-timescaledb$"; then
+    docker stop trading-timescaledb
+    echo "  TimescaleDB 已停止"
+else
+    echo "  TimescaleDB 未运行"
+fi
+
+echo ""
+echo "=== 所有服务已关闭 ==="

@@ -1,0 +1,20 @@
+#!/bin/bash
+# 查看所有服务状态
+
+echo "=== jzhu-trading 服务状态 ==="
+
+echo ""
+echo "--- Docker 容器 ---"
+docker ps -a --filter "name=trading-timescaledb" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+echo ""
+echo "--- Java 服务端口 ---"
+echo -n "web-service (8080):      "
+(fuser 8080/tcp 2>/dev/null && echo "运行中") || echo "已停止"
+
+echo -n "market-data-service (8081): "
+(fuser 8081/tcp 2>/dev/null && echo "运行中") || echo "已停止"
+
+echo ""
+echo "--- Java 进程 ---"
+ps aux | grep -E "spring-boot|market-data|web-service" | grep -v grep || echo "无运行中的Java服务"
